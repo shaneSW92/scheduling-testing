@@ -1,0 +1,11 @@
+<component name="libraryTable">
+  <library name="ktorm" type="kotlin.js">
+    <CLASSES />
+    <JAVADOC />
+    <SOURCES>
+      <root url="jar://$PROJECT_DIR$/../ktorm-master.zip!/" />
+      <root url="jar://$PROJECT_DIR$/../ktorm-master.zip!/ktorm-master/buildSrc" />
+      <root url="jar://$PROJECT_DIR$/../ktorm-master.zip!/ktorm-master" />
+    </SOURCES>
+  </library>
+</component>
