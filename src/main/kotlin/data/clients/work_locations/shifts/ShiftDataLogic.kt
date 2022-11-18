@@ -349,11 +349,11 @@ object ShiftDataLogic {
             // Retrieve the State overtime definitions
             val stateDefinitions = statesOtDefinitions[shiftsStateEnum[parallelListIndex]]
 
-            // Assign temporary State overtime definition values for easy reading
-            val dailyOtMin = stateDefinitions?.get(StateOtDefinitionEnum.DAILY_OT)?.toULong()?.times(3600UL)
-            val dailyDblotMin = stateDefinitions?.get(StateOtDefinitionEnum.DAILY_DBLOT)?.toULong()?.times(3600UL)
-            val weeklyOtMin = stateDefinitions?.get(StateOtDefinitionEnum.WEEKLY_OT)?.toULong()?.times(3600UL)
-            val weeklyDblotMin = stateDefinitions?.get(StateOtDefinitionEnum.WEEKLY_DBLOT)?.toULong()?.times(3600UL)
+            // Convert State overtime definition values to seconds, if not null
+            val dailyOtMin = stateDefinitions?.get(StateOtDefinitionEnum.DAILY_OT)?.times(3600f)?.toULong()
+            val dailyDblotMin = stateDefinitions?.get(StateOtDefinitionEnum.DAILY_DBLOT)?.times(3600f)?.toULong()
+            val weeklyOtMin = stateDefinitions?.get(StateOtDefinitionEnum.WEEKLY_OT)?.times(3600f)?.toULong()
+            val weeklyDblotMin = stateDefinitions?.get(StateOtDefinitionEnum.WEEKLY_DBLOT)?.times(3600f)?.toULong()
 
             // If this is for pay, then sum all the acum values; otherwise use the specified client amount
             val dailyAcum =

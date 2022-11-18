@@ -31,7 +31,7 @@ object Messages {
             val clientPkToWorkLocationPks =
                 SheetReader.createDataMapToValuesMap(SheetReader.readCsv(), WorkLocationData.CLIENT_PK)
             val stateEnums = StateEnum.values()
-            for (clientId in results.dataQuery.shiftsClient) {
+            for (clientId in results.dataQuery.shiftsClient.toSet()) {
                 println("Client ${clientId}:\n")
                 for (workLocationMap in clientPkToWorkLocationPks[clientId]!!) {
                     val workLocationId = workLocationMap[WorkLocationData.WORK_LOCATION_PK] as ULong
