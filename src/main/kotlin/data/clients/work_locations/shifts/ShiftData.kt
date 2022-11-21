@@ -4,6 +4,7 @@ import data.SQL
 import data.DataTable
 import data.ReadableTable.ValueType
 import data.ReadableTable.ValueTypeComparable.*
+import data.ReadableTable.ValueTypeNotComparable.*
 
 enum class ShiftData (override val fieldName: String, override val valueType: ValueType,
                       override val nullable: Boolean) : DataTable.DataTableType.ListTable {
@@ -11,6 +12,7 @@ enum class ShiftData (override val fieldName: String, override val valueType: Va
         SHIFT_PK ("id", ULONG, false),
         WORK_LOCATION_PK ("post_location_id", ULONG, false),
         EMPLOYEE_PK ("employee_id", ULONG, true),
+        NEEDS_RECONCILIATION ("????", BOOLEAN, true),
         START_DATE ("shift_start_date", DATE, false),
         START_TIME ("shift_start_time", TIME, false),
         END_DATE ("shift_start_time", DATE, false),

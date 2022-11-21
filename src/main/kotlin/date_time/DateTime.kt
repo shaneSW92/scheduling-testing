@@ -2,6 +2,7 @@ package date_time
 
 import java.time.Duration
 import java.time.LocalDateTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlin.math.absoluteValue
 
@@ -28,6 +29,8 @@ class DateTime (year: UInt, month: UInt, dayOfMonth: UInt, hour: UInt,
     constructor (date: Date, time: Time) : this (date.year, date.month, date.dayOfMonth, time.hour, time.minute, time.second)
 
     constructor (stringToParse: String) : this (LocalDateTime.parse(stringToParse, DateTimeFormatter.ISO_DATE_TIME))
+
+    constructor (zone: ZoneId) : this (LocalDateTime.now(zone))
 
     constructor () : this (LocalDateTime.now())
 

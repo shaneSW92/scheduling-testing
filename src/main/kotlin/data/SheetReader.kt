@@ -8,7 +8,6 @@ import Messages.prettyError
 import data.states.StateEnum
 import data.states.StateOtDefinitionData
 import data.states.StateOtDefinitionEnum
-import data.QueryCondition.QueryConditionType
 import data.clients.contracts.ContractData
 import data.clients.contracts.holidays.ContractHolidayData
 import data.clients.work_locations.WorkLocationData
@@ -28,21 +27,13 @@ import java.time.DayOfWeek
  */
 object SheetReader {
 
-
-    inline fun <reified Field> readCsv () where Field: Enum<Field>, Field: DataTableType = readCsv<Field>(listOf(), listOf())
-
     /**
      * This function returns a List of Maps where the key represents an Enum and the value is a cell in the CSV file,
      * with the keys / Enums representing the columns of the spreadsheet.
      *
-     * The given Enum class must implement the data.SheetReadable interface, which forces the Enums to implement
-     * a method that converts a given String to Any type.
-     *
-     * Values may be null either by choice or if the conversion of the string failed.
-     *
      * Keys / Headers are NOT case-sensitive.
      */
-    inline fun <reified Field> readCsv (selectors: List<Field>, conditions: List<Pair<Field, QueryConditionType>>) :
+    inline fun <reified Field> readCsv () :
             List<Map<Field, Any?>> where Field: Enum<Field>, Field: DataTableType {
 
         // First get the file and verify data was retrieved, or otherwise return an empty List
@@ -139,7 +130,7 @@ object SheetReader {
     }
 
     inline fun <reified Field> createDataMapToValuesMap (data: List<Map<Field, Any?>>, keyField: Field):
-            Map<ULong, List<Map<Field, Any?>>> where Field : Enum<Field>, Field: DataTableType {
+            MutableMap<ULong, MutableList<Map<Field, Any?>>> where Field : Enum<Field>, Field: DataTableType {
         val tempMap = mutableMapOf<ULong, MutableList<Map<Field, Any?>>>()
         for (row in data) {
             val key = row[keyField] as ULong
@@ -148,12 +139,12 @@ object SheetReader {
             else
                 tempMap[key]?.add(row.minus(keyField))
         }
-        return tempMap.toMap()
+        return tempMap
     }
 
-    inline fun <reified Field> createDataMapToValue (data: List<Map<Field, Any?>>, keyField: Field,
-                                                     valueField: Field):
-            Map<ULong, Any?> where Field : Enum<Field>, Field: DataTable.DataTableType {
+    private inline fun <reified Field> createDataMapToValue (data: List<Map<Field, Any?>>, keyField: Field,
+                                                             valueField: Field):
+            Map<ULong, Any?> where Field : Enum<Field>, Field: DataTableType {
 
         val tempMap = mutableMapOf<ULong, Any?>()
         for (row in data)
@@ -162,204 +153,116 @@ object SheetReader {
 
     }
 
-    fun getShiftCalculationData (shift: Shift, newBreaks: List<Break>?, forPay: Boolean) : ShiftCalculationDataQuery {
+    fun getShiftCalculationData (shifts: List<Shift>, newBreaks: List<List<Break>?>,
+                                 forPay: Boolean) : ShiftCalculationDataQuery {
 
-        val startingDayOfWeek = readCsv<ScheduleSettingsData>().first()[ScheduleSettingsData.STARTING_DAY_OF_WEEK] as DayOfWeek
-        val otherShiftsWithinPeriod = getSortedEmployeeShiftsWithinPeriod(shift, startingDayOfWeek, forPay)
+        val startingDayOfWeek =
+            readCsv<ScheduleSettingsData>().first()[ScheduleSettingsData.STARTING_DAY_OF_WEEK] as DayOfWeek
+        val otherShifts = getEmployeeShiftsWithinPeriods(shifts, startingDayOfWeek, forPay)
+        val allShiftsSorted = shifts.union(otherShifts).sortedBy { shift -> shift.startDateTime }
 
-        val parallelDateTimesList = MutableList (otherShiftsWithinPeriod.size) { index ->
-            val shiftInList = otherShiftsWithinPeriod[index]
+        val parallelDateTimesList = List (allShiftsSorted.size) { index ->
+            val shiftInList = allShiftsSorted[index]
             if (forPay)
-                shiftInList.payStartDateTime!!.rangeTo(shiftInList.payEndDateTime!!)
+                if (shiftInList.payStartDateTime != null && shiftInList.payEndDateTime != null)
+                    shiftInList.payStartDateTime.rangeTo(shiftInList.payEndDateTime)
+                else
+                    null
             else
                 shiftInList.startDateTime.rangeTo(shiftInList.endDateTime)
         }
 
-        val shiftPkToBreaksMap = getShiftPkToBreaksMap(otherShiftsWithinPeriod)
-        val parallelBreakList = MutableList (otherShiftsWithinPeriod.size) { index ->
-            shiftPkToBreaksMap[otherShiftsWithinPeriod[index].primaryKey]
+        val workLocationMaps = getWorkLocationMaps(allShiftsSorted, shifts)
+        val parallelClientList = List (allShiftsSorted.size) { index ->
+            workLocationMaps.toClientPk[allShiftsSorted[index].workLocationPk] as ULong
+        }
+        val parallelStateEnumList = List (allShiftsSorted.size) { index ->
+            workLocationMaps.toStateEnum[allShiftsSorted[index].workLocationPk] as StateEnum
         }
 
-        val workLocationMaps = getWorkLocationMaps(otherShiftsWithinPeriod, shift)
-
-        val parallelClientList = MutableList (otherShiftsWithinPeriod.size) { index ->
-            workLocationMaps.toClientPk[otherShiftsWithinPeriod[index].workLocationPk] as ULong
+        val shiftPkToBreaksMap = getShiftPkToBreaksMap(allShiftsSorted)
+        for ((index, shift) in shifts.withIndex()) {
+            if (newBreaks[index] != null)
+                shiftPkToBreaksMap[shift.primaryKey as ULong] = newBreaks[index] as List<Break>
+        }
+        val parallelBreakList = List (allShiftsSorted.size) { index ->
+            shiftPkToBreaksMap[allShiftsSorted[index].primaryKey]
         }
 
-        val parallelStateEnumList = MutableList (otherShiftsWithinPeriod.size) { index ->
-            workLocationMaps.toStateEnum[otherShiftsWithinPeriod[index].workLocationPk] as StateEnum
+        val shiftIndices = List (shifts.size) { index ->
+            allShiftsSorted.indexOfFirst{ shift-> shift.primaryKey == shifts[index].primaryKey }
         }
-
-        var insertedAt = -1
-        for ((index, dateTimes) in parallelDateTimesList.withIndex()) {
-            if (dateTimes.start > shift.startDateTime) {
-                insertedAt = index
-                break
-            }
-        }
-        if (insertedAt == -1)
-            insertedAt = parallelDateTimesList.size - 1
-        otherShiftsWithinPeriod.add(insertedAt, shift)
-        if (forPay)
-            parallelDateTimesList.add(insertedAt, shift.payStartDateTime!!.rangeTo(shift.payEndDateTime!!))
-        else
-            parallelDateTimesList.add(insertedAt, shift.startDateTime.rangeTo(shift.endDateTime))
-        parallelBreakList.add(insertedAt, newBreaks)
-        parallelClientList.add(insertedAt, workLocationMaps.toClientPk[shift.workLocationPk] as ULong)
-        parallelStateEnumList.add(insertedAt, workLocationMaps.toStateEnum[shift.workLocationPk] as StateEnum)
-        if (newBreaks != null)
-            parallelBreakList[insertedAt] = newBreaks
 
         return ShiftCalculationDataQuery (
-            parallelDateTimesList,
-            parallelStateEnumList,
-            parallelBreakList,
-            parallelClientList,
-            getStateEnumToStateOtDefinitionsMap(parallelStateEnumList),
-            getClientPkToHolidaysMap(parallelClientList),
-            startingDayOfWeek,
-            insertedAt,
-            otherShiftsWithinPeriod
+            shiftsDateTimes = parallelDateTimesList,
+            shiftsStateEnum = parallelStateEnumList,
+            shiftsBreaks = parallelBreakList,
+            shiftsClient = parallelClientList,
+            statesOtDefinitions = getStateEnumToStateOtDefinitionsMap(parallelStateEnumList),
+            clientsHolidays = getClientPkToHolidaysMap(parallelClientList),
+            startingDayOfWeek = startingDayOfWeek,
+            insertedAt = shiftIndices,
+            shifts = allShiftsSorted
         )
 
     }
 
-    data class ShiftCalculationDataQuery (val shiftsDateTimes: List<ClosedRange<DateTime>>,
+    data class ShiftCalculationDataQuery (val shiftsDateTimes: List<ClosedRange<DateTime>?>,
                                           val shiftsStateEnum: List<StateEnum>,
                                           val shiftsBreaks: List<List<Break>?>, val shiftsClient: List<ULong>,
                                           val statesOtDefinitions: Map<StateEnum, Map<StateOtDefinitionEnum, Float?>>,
                                           val clientsHolidays: Map<ULong, List<Date>>,
-                                          val startingDayOfWeek: DayOfWeek, val insertedAt: Int,
+                                          val startingDayOfWeek: DayOfWeek, val insertedAt: List<Int>,
                                           val shifts: List<Shift>)
 
+    private fun getEmployeeShiftsWithinPeriods (shifts: List<Shift>, startingDayOfWeek: DayOfWeek,
+                                                forPay: Boolean): List<Shift> {
 
+        val periods = mutableListOf<ClosedRange<DateTime>>()
 
-    fun getStateOtDefinitions () : Map<StateEnum, Map<StateOtDefinitionEnum, Float?>> {
-        // First read the sheet to get rows of State IDs (1-50), the period type ("Day" or "Week"),
-        // and the minimum hours
-        val dataRows = readCsv<StateOtDefinitionData>()
-        // For each row, assign a map of states to a list of their state definitions
-        val stateDefTempMap = mutableMapOf<StateEnum, MutableList<Map<StateOtDefinitionData, Any>>>()
-        val stateEnums = StateEnum.values()
-        dataRows.forEach { row ->
-            val stateIndex = row[StateOtDefinitionData.STATE_PK] as UInt // 1-50, as is the database
-            val stateEnum = stateEnums[(stateIndex - 1u).toInt()]
-            val tempDefMap = mapOf (
-                StateOtDefinitionData.PERIOD to row[StateOtDefinitionData.PERIOD] as String,
-                StateOtDefinitionData.MINIMUM_HOURS to row[StateOtDefinitionData.MINIMUM_HOURS] as Float
-            )
-            // The list needs to be initialized first
-            if (stateDefTempMap[stateEnum].isNullOrEmpty())
-                stateDefTempMap[stateEnum] = mutableListOf(tempDefMap)
-            else
-                stateDefTempMap[stateEnum]?.add(tempDefMap)
-        }
-        // Now create and assign a map of states to a map of state definition enums to the minimum hours
-        val stateDefMap = mutableMapOf<StateEnum, Map<StateOtDefinitionEnum, Float?>>()
-        var failures = 0
-        val maxFailures = 3
-        for (stateEnum in stateDefTempMap.keys) {
-            // Split up the definitions by the period between daily and weekly and sort by the minimum hours
-            // In the database, the "period" values are an enum of either "Day" or "Week"
-            val weekDefs = stateDefTempMap[stateEnum]?.filter {definitionMap ->
-                (definitionMap[StateOtDefinitionData.PERIOD] as String).lowercase().contains("we")
-            }?.sortedBy { definitionMap ->
-                definitionMap[StateOtDefinitionData.MINIMUM_HOURS] as Float
+        var inPeriod = false
+        for (shift in shifts) {
+            for (period in periods)
+                if (shift.startDateTime in period.start .. period.endInclusive) {
+                    inPeriod = true
+                    break
+                }
+            if (!inPeriod) {
+                val startOfWeek = DateTime(shift.startDateTime.date.getFirstDayOfWeek(startingDayOfWeek), Time(0u,0u,0u))
+                val endOfWeek = DateTime(startOfWeek.date.offsetDays(6), Time(23u, 59u, 59u))
+                periods.add(startOfWeek.rangeTo(endOfWeek))
             }
-            val dailyDefs = stateDefTempMap[stateEnum]?.filter {definitionMap ->
-                (definitionMap[StateOtDefinitionData.PERIOD] as String).lowercase().contains("da")
-            }?.sortedBy { definitionMap ->
-                definitionMap[StateOtDefinitionData.MINIMUM_HOURS] as Float
-            }
-            // If the definitions are both empty, then the values must have been wrong
-            if (weekDefs.isNullOrEmpty() && dailyDefs.isNullOrEmpty()) {
-                failures++
-                var ids = ""
-                for (def in stateDefTempMap[stateEnum]!!)
-                    ids += "${def[StateOtDefinitionData.PERIOD] as String}\n"
-                prettyError (
-                    "Tried to get state definitions but the values for the following table IDs are invalid:\n" +
-                            ids +
-                            "\nNeeds to be either \"Day\" or \"Week\"!\n" +
-                            "\nSkipping row . . ."
-                )
-                if (failures > maxFailures)
-                    throw Exception("Too many incorrect values for state definition types!")
-            } else {
-                // Assign the map from the sorted values, which may be null if nothing was found
-                stateDefMap[stateEnum] = mapOf (
-                    StateOtDefinitionEnum.WEEKLY_OT to weekDefs?.getOrNull(0)?.get(StateOtDefinitionData.MINIMUM_HOURS) as Float?,
-                    StateOtDefinitionEnum.WEEKLY_DBLOT to weekDefs?.getOrNull(1)?.get(StateOtDefinitionData.MINIMUM_HOURS) as Float?,
-                    StateOtDefinitionEnum.DAILY_OT to dailyDefs?.getOrNull(0)?.get(StateOtDefinitionData.MINIMUM_HOURS) as Float?,
-                    StateOtDefinitionEnum.DAILY_DBLOT to dailyDefs?.getOrNull(1)?.get(StateOtDefinitionData.MINIMUM_HOURS) as Float?
-                )
-            }
+            inPeriod = false
         }
-        return stateDefMap.toMap()
-    }
 
-
-
-
-
-
-
-
-
-
-
-    fun getShift (shiftPk: ULong?): Shift {
-        val shiftMap = readCsv<ShiftData>().first { shiftData ->
-            shiftData[ShiftData.SHIFT_PK] as ULong == shiftPk
-        }
-        return Shift (
-            shiftPk,
-            shiftMap[ShiftData.EMPLOYEE_PK] as ULong?,
-            shiftMap[ShiftData.WORK_LOCATION_PK] as ULong,
-            DateTime(shiftMap[ShiftData.START_DATE] as Date, shiftMap[ShiftData.START_TIME] as Time),
-            DateTime(shiftMap[ShiftData.END_DATE] as Date, shiftMap[ShiftData.END_TIME] as Time),
-            shiftMap[ShiftData.PAY_START_DATE_TIME] as DateTime?,
-            shiftMap[ShiftData.PAY_END_DATE_TIME] as DateTime?
-        )
-    }
-
-    fun getSortedEmployeeShiftsWithinPeriod (shift: Shift, startingDayOfWeek: DayOfWeek,
-                                             forPay: Boolean): MutableList<Shift> {
-
-        val startOfWeek = DateTime(shift.startDateTime.date.getFirstDayOfWeek(startingDayOfWeek), Time(0u,0u,0u))
-        val endOfWeek = DateTime(startOfWeek.date.offsetDays(6), Time(23u, 59u, 59u))
+        val shiftPkQuickLookup = getQuickLookup(List (shifts.size) { index -> shifts[index].primaryKey })
+        val employeePk = shifts.first().employeePk
 
         val shiftsDataList = readCsv<ShiftData>().filter { shiftMap ->
 
-            if (shiftMap[ShiftData.SHIFT_PK] as ULong == shift.primaryKey)
-                false
-            else {
+            shiftMap[ShiftData.EMPLOYEE_PK] as ULong? == employeePk
+                &&
+                !shiftPkQuickLookup.containsKey(shiftMap[ShiftData.SHIFT_PK] as ULong)
+                &&
+                periods.any { period ->
+                    val startDateTime = DateTime (
+                        shiftMap[ShiftData.START_DATE] as Date,
+                        shiftMap[ShiftData.START_TIME] as Time
+                    )
+                    startDateTime in period.start .. period.endInclusive
+                }
+                &&
+                if (forPay) {
+                    shiftMap[ShiftData.PAY_START_DATE_TIME] != null
+                            && shiftMap[ShiftData.PAY_END_DATE_TIME] != null
+                            && !(shiftMap[ShiftData.NEEDS_RECONCILIATION] as Boolean? ?: true)
+                } else {
+                    true
+                }
 
-                val payTimesExistIfNeeded =
-                    if (forPay)
-                        shiftMap[ShiftData.PAY_START_DATE_TIME] != null && shiftMap[ShiftData.PAY_END_DATE_TIME] != null
-                    else
-                        true
-
-                val shiftStartDateTime = DateTime (
-                    shiftMap[ShiftData.START_DATE] as Date,
-                    shiftMap[ShiftData.START_TIME] as Time
-                )
-
-                shiftMap[ShiftData.EMPLOYEE_PK] as ULong? == shift.employeePk
-                        && shiftStartDateTime in startOfWeek..endOfWeek
-                        && payTimesExistIfNeeded
-
-            }
-
-        }.sortedBy { shiftMap ->
-            DateTime (
-                shiftMap[ShiftData.START_DATE] as Date,
-                shiftMap[ShiftData.START_TIME] as Time
-            )
         }
 
-        return MutableList (shiftsDataList.size) { index ->
+        return List (shiftsDataList.size) { index ->
             val shiftMap = shiftsDataList[index]
             Shift (
                 primaryKey = shiftMap[ShiftData.SHIFT_PK] as ULong,
@@ -374,7 +277,8 @@ object SheetReader {
                     shiftMap[ShiftData.END_TIME] as Time
                 ),
                 payStartDateTime = shiftMap[ShiftData.PAY_START_DATE_TIME] as DateTime?,
-                payEndDateTime = shiftMap[ShiftData.PAY_END_DATE_TIME] as DateTime?
+                payEndDateTime = shiftMap[ShiftData.PAY_END_DATE_TIME] as DateTime?,
+                needsReconciliation = shiftMap[ShiftData.NEEDS_RECONCILIATION] as Boolean? == true
             )
         }
 
@@ -388,7 +292,7 @@ object SheetReader {
         return quickLookup
     }
 
-    fun getShiftPkToBreaksMap (sortedEmployeeShifts: List<Shift>): Map<ULong, List<Break>> {
+    private fun getShiftPkToBreaksMap (sortedEmployeeShifts: List<Shift>): MutableMap<ULong, List<Break>> {
 
         val shiftQuickLookup = getQuickLookup(sortedEmployeeShifts.map { it.primaryKey!! })
 
@@ -406,13 +310,16 @@ object SheetReader {
             }
         }.filter { entry ->
             shiftQuickLookup.containsKey(entry.key)
-        }
+        }.toMutableMap()
 
     }
 
-    fun getWorkLocationMaps (shifts: List<Shift>, extraShift: Shift): WorkLocationMaps {
-        val quickLookupMap = getQuickLookup(shifts.map{it.workLocationPk})
-        quickLookupMap[extraShift.workLocationPk] = true
+    private fun getWorkLocationMaps (shifts: List<Shift>, extraShifts: List<Shift>): WorkLocationMaps {
+
+        val quickLookupMap = getQuickLookup(shifts.map{ shift -> shift.workLocationPk })
+        for (shift in extraShifts)
+            quickLookupMap[shift.workLocationPk] = true
+
         val stateEnums = StateEnum.values()
         val workLocationPkToClientPkMap = mutableMapOf<ULong, ULong>()
         val workLocationPkToStateEnumMap = mutableMapOf<ULong, StateEnum>()
@@ -424,12 +331,14 @@ object SheetReader {
                     stateEnums[(workLocationDataMap[WorkLocationData.STATE_INDEX] as ULong).toInt() - 1]
             }
         }
+
         return WorkLocationMaps(workLocationPkToClientPkMap, workLocationPkToStateEnumMap)
+
     }
 
     data class WorkLocationMaps (val toClientPk: Map<ULong, ULong>, val toStateEnum: Map<ULong, StateEnum>)
 
-    fun getStateEnumToStateOtDefinitionsMap
+    private fun getStateEnumToStateOtDefinitionsMap
                 (stateEnums: List<StateEnum>) : Map<StateEnum, Map<StateOtDefinitionEnum, Float?>> {
 
         val stateEnumsLookup = StateEnum.values()
@@ -467,7 +376,7 @@ object SheetReader {
 
     }
 
-    fun getClientPkToHolidaysMap (clientPks: List<ULong>) : Map<ULong, List<Date>> {
+    private fun getClientPkToHolidaysMap (clientPks: List<ULong>) : Map<ULong, List<Date>> {
 
         var quickLookup = getQuickLookup(clientPks)
 

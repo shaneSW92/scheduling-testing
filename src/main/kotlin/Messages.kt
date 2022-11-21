@@ -1,13 +1,13 @@
 import data.DataTable
 import data.SheetReader
 import data.clients.work_locations.WorkLocationData
-import data.clients.work_locations.shifts.ShiftDataLogic
+import data.clients.work_locations.shifts.ShiftCalculationResults
 import data.states.StateEnum
 import data.states.StateOtDefinitionEnum
 
 object Messages {
 
-    fun printShiftCalculationResults (results: ShiftDataLogic.ShiftCalculationResults) {
+    fun printShiftCalculationResults (results: ShiftCalculationResults) {
 
         try {
 
@@ -52,8 +52,6 @@ object Messages {
 
             // Now print the processed shifts for the employee
             println("-------------- SHIFTS ---------------\n")
-
-            // This loop is just here to print results
             for ((index, shift) in results.shifts.shifts.withIndex()) {
                 val shiftId = shift.primaryKey
                 val payStartDateTime = shift.payStartDateTime
@@ -75,6 +73,7 @@ object Messages {
                 } else {
                     println("\t\t\tNone")
                 }
+                println("\t\tNeeds reconciliation: ${shift.needsReconciliation}")
                 if (results.forPay) {
                     println("\t\tPay:")
                     println("\t\t\tStart datetime: $payStartDateTime")
@@ -84,11 +83,11 @@ object Messages {
                     println("\t\t\tStart datetime: $startDateTime")
                     println("\t\t\tEnd datetime: $endDateTime")
                 }
-                println("\t\t\tWorked hours: ${results.shifts.shiftHours[index].workedHours}")
-                println("\t\t\tNormal hours: ${results.shifts.shiftHours[index].normalHours}")
-                println("\t\t\tOT hours: ${results.shifts.shiftHours[index].otHours}")
-                println("\t\t\tDBLOT hours: ${results.shifts.shiftHours[index].dblotHours}")
-                println("\t\t\tHoliday hours: ${results.shifts.shiftHours[index].holidayHours}")
+                println("\t\t\tWorked hours: ${results.shifts.shiftHours[index]?.workedHours}")
+                println("\t\t\tNormal hours: ${results.shifts.shiftHours[index]?.normalHours}")
+                println("\t\t\tOT hours: ${results.shifts.shiftHours[index]?.otHours}")
+                println("\t\t\tDBLOT hours: ${results.shifts.shiftHours[index]?.dblotHours}")
+                println("\t\t\tHoliday hours: ${results.shifts.shiftHours[index]?.holidayHours}")
                 println()
             }
 
