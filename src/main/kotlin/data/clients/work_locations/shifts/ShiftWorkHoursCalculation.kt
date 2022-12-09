@@ -35,7 +35,10 @@ fun getShiftsWorkHours (shiftsDateTimes: List<ClosedRange<DateTime>?>, shiftsSta
     // For each shift (ordered by time), calculate the hours and insert the hours into the list of shift hours
     for ((parallelListIndex, shiftDateTimes) in shiftsDateTimes.withIndex()) {
 
-        if (shiftDateTimes?.start == null && shiftDateTimes?.endInclusive == null) {
+        // The datetimes will be null if this shift does not apply, which may be the case if multiple shifts were
+        // being edited and only some of them have pay times (this calculation would be for pay).
+        // If so, add a null value to the list and skip.
+        if (shiftDateTimes == null) {
             shiftHours.add(null)
             continue
         }
@@ -181,7 +184,7 @@ private fun getTotalSeconds (dailySeconds: Pair<Long, Pair<Long, Long>>,
     return Pair (
         weeklyNormal,
         Pair (
-            dailyOt+ weeklyOt,
+            dailyOt + weeklyOt,
             dailyDblot + weeklyDblot
         )
     )
@@ -228,26 +231,24 @@ private fun getHolidaySeconds (workedTimeSegments: List<ClosedRange<DateTime>>, 
         for (period in workedTimeSegments.sortedBy { it.start }) {
             // Get the total amount of time of the period
             val secondsOfPeriod = period.start.secondsBetween(period.endInclusive)
-            // Get the amount of holiday the period covers
-            val holidaySeconds = getHolidaySecondsSegment(period, holidays)
-            // If the amount of holiday will go over the allotted time, then clamp and return the maximum amount
-            if (secondsConsumed + secondsOfPeriod >= normalDailySeconds) {
-                return totalHolidaySeconds + min (
-                    normalDailySeconds - secondsConsumed,
-                    holidaySeconds
+            // If the total worked time plus the seconds consumed is more than the allotted time, accumulate with a new
+            // range using the remainder and break out of the loop to return the total
+            if (secondsOfPeriod + secondsConsumed >= normalDailySeconds) {
+                totalHolidaySeconds += getHolidaySecondsSegment (
+                    period = period.start.rangeTo (
+                        period.start.offsetSeconds(normalDailySeconds.toLong() - secondsConsumed.toLong())
+                    ),
+                    holidays = holidays
                 )
-            // Otherwise, continue accumulating the amount of holiday
+                break
+            // Otherwise, accumulate the consumer and the amount of holiday in the period
             } else {
                 secondsConsumed += secondsOfPeriod
-                totalHolidaySeconds += holidaySeconds
+                totalHolidaySeconds += getHolidaySecondsSegment(period, holidays)
             }
         }
-        // The code should never reach here, assuming the daily normal
-        // seconds is less or equal to the sum of time segments
-        throw Exception (
-            "Tried to get holiday seconds but the time periods provided appear to be " +
-                    "larger than the allotted normal daily seconds!"
-        )
+
+        return totalHolidaySeconds
 
     }
 
