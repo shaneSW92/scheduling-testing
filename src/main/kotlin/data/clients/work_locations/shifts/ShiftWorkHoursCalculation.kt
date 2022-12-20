@@ -75,8 +75,11 @@ fun getShiftsWorkHours (shiftsDateTimes: List<ClosedRange<DateTime>?>, shiftsSta
         else
             dailyOtAccumulator[clientId] = dailyOtAccumulator[clientId]!! + workSeconds.first
 
-        //
+        // First see if overtime is billable
         val totalSeconds =
+
+            // If for billing and overtime is not billable, then accumulate the weekly by the full worked time and
+            // set overtime to 0
             if (billableOt?.get(parallelListIndex) == false) {
 
                 if (weeklyOtAccumulator[clientId] == null)
@@ -86,6 +89,7 @@ fun getShiftsWorkHours (shiftsDateTimes: List<ClosedRange<DateTime>?>, shiftsSta
 
                 Pair(workSeconds.first.toLong(), Pair(0L, 0L))
 
+            // Otherwise, the shift is for pay or overtime is billable
             } else {
 
                 // Retrieve the State overtime definitions
