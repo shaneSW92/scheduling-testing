@@ -7,5 +7,7 @@ enum class GlobalEdmCode (type: EDM) {
     DBLOT (Earning.OVERTIME),
     BRK (Memo.MEMO),
     PABRK (Earning.NORMAL),
-    PBRK (Earning.NORMAL)
+    PBRK (Earning.NORMAL),
+    T (Earning.TRAINING),
+    TR (Earning.TRAINING)
 }

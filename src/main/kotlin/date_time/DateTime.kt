@@ -14,7 +14,7 @@ class DateTime (year: UInt, month: UInt, dayOfMonth: UInt, hour: UInt,
     val time: Time
 
     init {
-        javaDateTime = LocalDateTime.of(
+        javaDateTime = LocalDateTime.of (
             year.toInt(),
             month.toInt(),
             dayOfMonth.toInt(),
@@ -35,13 +35,13 @@ class DateTime (year: UInt, month: UInt, dayOfMonth: UInt, hour: UInt,
     constructor () : this (LocalDateTime.now())
 
     private constructor (localDateTime: LocalDateTime) : this (
-        Date(localDateTime.year.toUInt(), localDateTime.month.value.toUInt(), localDateTime.dayOfMonth.toUInt()),
-        Time(localDateTime.hour.toUInt(), localDateTime.minute.toUInt(), localDateTime.second.toUInt())
+        localDateTime.year.toUInt(), localDateTime.month.value.toUInt(), localDateTime.dayOfMonth.toUInt(),
+        localDateTime.hour.toUInt(), localDateTime.minute.toUInt(), localDateTime.second.toUInt()
     )
 
     override operator fun compareTo (other: DateTime): Int = this.javaDateTime.compareTo(other.javaDateTime)
 
-    override fun toString() = javaDateTime.toString() //"${date}T$time"
+    override fun toString() = javaDateTime.toString()
 
     fun secondsBetween (dateTime2: DateTime) =
         Duration.between(javaDateTime, dateTime2.javaDateTime).toSeconds().absoluteValue.toULong()

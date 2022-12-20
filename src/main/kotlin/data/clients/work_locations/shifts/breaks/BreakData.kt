@@ -13,7 +13,7 @@ enum class BreakData (override val fieldName: String, override val valueType: Va
     SHIFT_PK ("shift_id", ULONG, false),
     START_DATE_TIME ("break_start_date_Date_time", DATETIME, false),
     DURATION_MINUTES ("break_duration", UINT, false),
-    //PAID_BREAK ("is_paid_break", UINT, true),
+    PAID_BREAK ("is_paid_break", UINT, true),
     PREMIUM ("is_premium_break", BOOLEAN, true),
     MEAL ("is_meal", BOOLEAN, true),
     //CLOCK_TYPE (TODO(), TODO(), false)

@@ -164,15 +164,15 @@ object SheetReader {
         val parallelDateTimesList = List (allShiftsSorted.size) { index ->
             val shiftInList = allShiftsSorted[index]
             if (forPay)
-                if (shiftInList.payStartDateTime != null && shiftInList.payEndDateTime != null)
-                    shiftInList.payStartDateTime.rangeTo(shiftInList.payEndDateTime)
-                else
+                if (shiftInList.payStartDateTime == null || shiftInList.payEndDateTime == null)
                     null
+                else
+                    shiftInList.payStartDateTime.rangeTo(shiftInList.payEndDateTime)
             else
                 shiftInList.startDateTime.rangeTo(shiftInList.endDateTime)
         }
 
-        val workLocationMaps = getWorkLocationMaps(allShiftsSorted, shifts)
+        val workLocationMaps = getWorkLocationMaps(allShiftsSorted)
         val parallelClientList = List (allShiftsSorted.size) { index ->
             workLocationMaps.toClientPk[allShiftsSorted[index].workLocationPk] as ULong
         }
@@ -193,11 +193,20 @@ object SheetReader {
             allShiftsSorted.indexOfFirst{ shift-> shift.primaryKey == shifts[index].primaryKey }
         }
 
+        val parallelBillableOtList =
+            if (forPay)
+                null
+            else
+                List (allShiftsSorted.size) { index ->
+                    allShiftsSorted[index].billableOt
+                }
+
         return ShiftCalculationDataQuery (
             shiftsDateTimes = parallelDateTimesList,
             shiftsStateEnum = parallelStateEnumList,
             shiftsBreaks = parallelBreakList,
             shiftsClient = parallelClientList,
+            shiftsBillableOt = parallelBillableOtList,
             statesOtDefinitions = getStateEnumToStateOtDefinitionsMap(parallelStateEnumList),
             clientsHolidays = getClientPkToHolidaysMap(parallelClientList),
             startingDayOfWeek = startingDayOfWeek,
@@ -210,6 +219,7 @@ object SheetReader {
     data class ShiftCalculationDataQuery (val shiftsDateTimes: List<ClosedRange<DateTime>?>,
                                           val shiftsStateEnum: List<StateEnum>,
                                           val shiftsBreaks: List<List<Break>?>, val shiftsClient: List<ULong>,
+                                          val shiftsBillableOt: List<Boolean>?,
                                           val statesOtDefinitions: Map<StateEnum, Map<StateOtDefinitionEnum, Float?>>,
                                           val clientsHolidays: Map<ULong, List<Date>>,
                                           val startingDayOfWeek: DayOfWeek, val insertedAt: List<Int>,
@@ -278,7 +288,10 @@ object SheetReader {
                 ),
                 payStartDateTime = shiftMap[ShiftData.PAY_START_DATE_TIME] as DateTime?,
                 payEndDateTime = shiftMap[ShiftData.PAY_END_DATE_TIME] as DateTime?,
-                needsReconciliation = shiftMap[ShiftData.NEEDS_RECONCILIATION] as Boolean? == true
+                billableOt = shiftMap[ShiftData.BILLABLE_OT] as Boolean? ?: false,
+                needsReconciliation = shiftMap[ShiftData.NEEDS_RECONCILIATION] as Boolean? ?: false,
+                rate = shiftMap[ShiftData.BILL_RATE] as Float?,
+                payRate = shiftMap[ShiftData.PAY_RATE] as Float?
             )
         }
 
@@ -304,6 +317,7 @@ object SheetReader {
                     clientPkToBreaks.key,
                     breaks[breaksIndex][BreakData.START_DATE_TIME] as DateTime,
                     breaks[breaksIndex][BreakData.DURATION_MINUTES] as UInt,
+                    breaks[breaksIndex][BreakData.PAID_BREAK] as Boolean,
                     breaks[breaksIndex][BreakData.PREMIUM] as Boolean,
                     breaks[breaksIndex][BreakData.MEAL] as Boolean
                 )
@@ -314,11 +328,9 @@ object SheetReader {
 
     }
 
-    private fun getWorkLocationMaps (shifts: List<Shift>, extraShifts: List<Shift>): WorkLocationMaps {
+    private fun getWorkLocationMaps (shifts: List<Shift>): WorkLocationMaps {
 
         val quickLookupMap = getQuickLookup(shifts.map{ shift -> shift.workLocationPk })
-        for (shift in extraShifts)
-            quickLookupMap[shift.workLocationPk] = true
 
         val stateEnums = StateEnum.values()
         val workLocationPkToClientPkMap = mutableMapOf<ULong, ULong>()

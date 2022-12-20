@@ -15,10 +15,10 @@ import kotlin.math.roundToInt
 // the same shift, and are ordered by the startDateTime from past to future. All inputs here are assumed to be
 // shift data for one employee. The maps are assumed to be filled with the necessary information for each shift.
 fun getShiftsWorkHours (shiftsDateTimes: List<ClosedRange<DateTime>?>, shiftsStateEnum: List<StateEnum>,
-                        shiftsBreaks: List<List<Break>?>, shiftsClient: List<ULong>,
+                        shiftsBreaks: List<List<Break>?>, shiftsClient: List<ULong>, billableOt: List<Boolean>?,
                         statesOtDefinitions: Map<StateEnum, Map<StateOtDefinitionEnum, Float?>>,
-                        clientsHolidays: Map<ULong, List<Date>?>, startingDayOfWeek: DayOfWeek,
-                        forPay: Boolean) : MutableList<WorkHours?> {
+                        clientsHolidays: Map<ULong, List<Date>?>,
+                        startingDayOfWeek: DayOfWeek) : MutableList<WorkHours?> {
 
     // Initialize daily and weekly accumulators, with the key being a PK for the client that the shift's work
     // location is for, and the value being a number of accumulated seconds
@@ -67,62 +67,76 @@ fun getShiftsWorkHours (shiftsDateTimes: List<ClosedRange<DateTime>?>, shiftsSta
         // Get the total amount of worked time as well as a list of worked time segments split up from breaks
         val breaks = shiftsBreaks[parallelListIndex]
         val workSeconds = getWorkSecondsAndSegments(startDateTime, endDateTime, breaks)
+        val clientId = shiftsClient[parallelListIndex]
 
         // Accumulate the daily overtime by the total worked time for each client
-        val clientId = shiftsClient[parallelListIndex]
         if (dailyOtAccumulator[clientId] == null)
             dailyOtAccumulator[clientId] = workSeconds.first
         else
             dailyOtAccumulator[clientId] = dailyOtAccumulator[clientId]!! + workSeconds.first
 
-        // Retrieve the State overtime definitions
-        val stateDefinitions = statesOtDefinitions[shiftsStateEnum[parallelListIndex]]
+        //
+        val totalSeconds =
+            if (billableOt?.get(parallelListIndex) == false) {
 
-        // Convert State overtime definition values to seconds, if not null
-        val dailyOtMin = stateDefinitions?.get(StateOtDefinitionEnum.DAILY_OT)?.times(3600f)?.toULong()
-        val dailyDblotMin = stateDefinitions?.get(StateOtDefinitionEnum.DAILY_DBLOT)?.times(3600f)?.toULong()
-        val weeklyOtMin = stateDefinitions?.get(StateOtDefinitionEnum.WEEKLY_OT)?.times(3600f)?.toULong()
-        val weeklyDblotMin = stateDefinitions?.get(StateOtDefinitionEnum.WEEKLY_DBLOT)?.times(3600f)?.toULong()
+                if (weeklyOtAccumulator[clientId] == null)
+                    weeklyOtAccumulator[clientId] = workSeconds.first
+                else
+                    weeklyOtAccumulator[clientId] = weeklyOtAccumulator[clientId]!! + workSeconds.first
 
-        // If this is for pay, then sum all the acum values; otherwise use the specified client amount
-        val dailyAcum =
-            if (forPay)
-                dailyOtAccumulator.values.sum()
-            else
-                dailyOtAccumulator[clientId]
+                Pair(workSeconds.first.toLong(), Pair(0L, 0L))
 
-        // Get the daily overtime amounts
-        val dailySeconds = getOvertime (
-            workSeconds = workSeconds.first.toLong(),
-            otMin = dailyOtMin?.toInt(),
-            dblotMin = dailyDblotMin?.toInt(),
-            otAccumulated = dailyAcum!!.toLong()
-        )
+            } else {
 
-        // Accumulate the weekly overtime by the amount of Daily Normal time for each client
-        val dailyNormal = dailySeconds.first.toULong()
-        if (weeklyOtAccumulator[clientId] == null)
-            weeklyOtAccumulator[clientId] = dailyNormal
-        else
-            weeklyOtAccumulator[clientId] = weeklyOtAccumulator[clientId]!! + dailyNormal
+                // Retrieve the State overtime definitions
+                val stateDefinitions = statesOtDefinitions[shiftsStateEnum[parallelListIndex]]
 
-        // If this is for pay, then sum all the acum values; otherwise use the specified client amount
-        val weeklyAcum =
-            if (forPay)
-                weeklyOtAccumulator.values.sum()
-            else
-                weeklyOtAccumulator[clientId]
+                // Convert State overtime definition values to seconds, if not null
+                val dailyOtMin = stateDefinitions?.get(StateOtDefinitionEnum.DAILY_OT)?.times(3600f)?.toULong()
+                val dailyDblotMin = stateDefinitions?.get(StateOtDefinitionEnum.DAILY_DBLOT)?.times(3600f)?.toULong()
+                val weeklyOtMin = stateDefinitions?.get(StateOtDefinitionEnum.WEEKLY_OT)?.times(3600f)?.toULong()
+                val weeklyDblotMin = stateDefinitions?.get(StateOtDefinitionEnum.WEEKLY_DBLOT)?.times(3600f)?.toULong()
 
-        // Get the amounts for weekly overtime based on the amount of Daily Normal
-        val weeklySeconds = getOvertime (
-            workSeconds = dailyNormal.toLong(),
-            otMin = weeklyOtMin?.toInt(),
-            dblotMin = weeklyDblotMin?.toInt(),
-            otAccumulated = weeklyAcum!!.toLong()
-        )
+                // If this is for pay, then sum all the acum values; otherwise use the specified client amount
+                val dailyAcum =
+                    if (billableOt.isNullOrEmpty())
+                        dailyOtAccumulator.values.sum()
+                    else
+                        dailyOtAccumulator[clientId]
 
-        // Sum the amounts of daily overtime and weekly overtime to get the total amount of Normal time and overtime
-        val totalSeconds = getTotalSeconds(dailySeconds, weeklySeconds)
+                // Get the daily overtime amounts
+                val dailySeconds = getOvertime (
+                    workSeconds = workSeconds.first.toLong(),
+                    otMin = dailyOtMin?.toInt(),
+                    dblotMin = dailyDblotMin?.toInt(),
+                    otAccumulated = dailyAcum!!.toLong()
+                )
+
+                // Accumulate the weekly overtime by the amount of Daily Normal time for each client
+                val dailyNormal = dailySeconds.first.toULong()
+                if (weeklyOtAccumulator[clientId] == null)
+                    weeklyOtAccumulator[clientId] = dailyNormal
+                else
+                    weeklyOtAccumulator[clientId] = weeklyOtAccumulator[clientId]!! + dailyNormal
+
+                // If this is for pay, then sum all the acum values; otherwise use the specified client amount
+                val weeklyAcum =
+                    if (billableOt.isNullOrEmpty())
+                        weeklyOtAccumulator.values.sum()
+                    else
+                        weeklyOtAccumulator[clientId]
+
+                // Get the amounts for weekly overtime based on the amount of Daily Normal
+                val weeklySeconds = getOvertime (
+                    workSeconds = dailyNormal.toLong(),
+                    otMin = weeklyOtMin?.toInt(),
+                    dblotMin = weeklyDblotMin?.toInt(),
+                    otAccumulated = weeklyAcum!!.toLong()
+                )
+
+                getTotalSeconds(dailySeconds, weeklySeconds)
+
+            }
 
         // Get an amount of holiday time that the shift may be on using the amount of Normal time and
         // the time segments acquired earlier. Holidays are determined by the client contract.
@@ -228,15 +242,16 @@ private fun getHolidaySeconds (workedTimeSegments: List<ClosedRange<DateTime>>, 
 
         // For each segment of worked time (separated by breaks), accumulate the holiday time to a maximum of
         // the allotted Daily Normal time
-        for (period in workedTimeSegments.sortedBy { it.start }) {
+        for (period in workedTimeSegments.sortedBy { period -> period.start }) {
             // Get the total amount of time of the period
             val secondsOfPeriod = period.start.secondsBetween(period.endInclusive)
             // If the total worked time plus the seconds consumed is more than the allotted time, accumulate with a new
             // range using the remainder and break out of the loop to return the total
             if (secondsOfPeriod + secondsConsumed >= normalDailySeconds) {
+                val newEnd = period.start.offsetSeconds(normalDailySeconds.toLong() - secondsConsumed.toLong())
                 totalHolidaySeconds += getHolidaySecondsSegment (
                     period = period.start.rangeTo (
-                        period.start.offsetSeconds(normalDailySeconds.toLong() - secondsConsumed.toLong())
+                        newEnd
                     ),
                     holidays = holidays
                 )
@@ -254,16 +269,16 @@ private fun getHolidaySeconds (workedTimeSegments: List<ClosedRange<DateTime>>, 
 
 }
 
-fun getShiftWorkHours (workedSeconds: Long, otSeconds: Long, dblotSeconds: Long, holidaySeconds: Long) : WorkHours {
+// Since we want to avoid math operations between floats, we keep a rounded int and shift
+//      the decimal place later.
+// Here we divide by the number of seconds in an hour, shift 2 decimal places to the left, and
+//      round to a truncated int.
+// For example, if the seconds to hours results in 1.1875, the result of this equation would be 119.
+// With this result, we can use it to compare whether this would result in more or less time than
+//      the total worked hours due to rounding multiple times.
+fun secondsToHoursAndShiftRoundTruncate (seconds: Long) = ((seconds.toFloat() / 3600) * 100).roundToInt()
 
-    // Since we want to avoid math operations between floats, we keep a rounded int and shift
-    //      the decimal place later.
-    // Here we divide by the number of seconds in an hour, shift 2 decimal places to the left, and
-    //      round to a truncated int.
-    // For example, if the seconds to hours results in 1.1875, the result of this equation would be 119.
-    // With this result, we can use it to compare whether this would result in more or less time than
-    //      the total worked hours due to rounding multiple times.
-    fun secondsToHoursAndShiftRoundTruncate (seconds: Long) = ((seconds.toFloat() / 3600) * 100).roundToInt()
+fun getShiftWorkHours (workedSeconds: Long, otSeconds: Long, dblotSeconds: Long, holidaySeconds: Long) : WorkHours {
 
     // First get the total normal seconds, which is the remainder of worked time
     val normalSeconds = workedSeconds - (dblotSeconds + otSeconds + holidaySeconds)
@@ -342,11 +357,17 @@ private fun getWorkSecondsAndSegments (startDateTime: DateTime, endDateTime: Dat
     // if there were no breaks
     workedTimeSegments.add(workStart.rangeTo(endDateTime))
 
+    val workedSecondsSum = workedTimeSegments.sumOf { range -> range.start.secondsBetween(range.endInclusive) }
+    // We go ahead and round the total worked time early because we want the overtime to be calculated based on the
+    // previous worked hours (not seconds) rounded, because the rounded hours is what is actually being paid to
+    // the employee, and the result may not add up to 40 (or 8 / 12 if daily overtime) if the base isn't rounded
+    // and used throughout the calculation. Here we convert the seconds to hours, round it, and then convert it back
+    // to seconds.
+    val sumRounded = ((secondsToHoursAndShiftRoundTruncate(workedSecondsSum.toLong()).toFloat() / 100) * 3600).toULong()
+
     // Return the sum of total worked time and the ordered list of worked time segments
     return Pair (
-        workedTimeSegments.sumOf { range ->
-            range.start.secondsBetween(range.endInclusive)
-        },
+        sumRounded,
         workedTimeSegments
     )
 

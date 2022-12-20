@@ -16,7 +16,8 @@ fun clockIn (shiftPk: ULong, startDateTime: DateTime, payStartDateTime: DateTime
 }
 
 fun clockOut (shiftPk: ULong, workLocationPk: ULong, dateTimes: ClosedRange<DateTime>,
-              payDateTimes: ClosedRange<DateTime>, employeePk: ULong) {
+              payDateTimes: ClosedRange<DateTime>, employeePk: ULong, rate: Float, payRate: Float,
+              billableOt: Boolean) {
 
     if (payDateTimes.endInclusive.secondsBetween(dateTimes.endInclusive) > 59u) {
 
@@ -29,14 +30,17 @@ fun clockOut (shiftPk: ULong, workLocationPk: ULong, dateTimes: ClosedRange<Date
     } else {
 
         val shift = Shift (
-            shiftPk,
-            employeePk,
-            workLocationPk,
-            dateTimes.start,
-            dateTimes.endInclusive,
-            payDateTimes.start,
-            payDateTimes.endInclusive,
-            needsReconciliation = false
+            primaryKey = shiftPk,
+            employeePk = employeePk,
+            workLocationPk = workLocationPk,
+            startDateTime = dateTimes.start,
+            endDateTime = dateTimes.endInclusive,
+            payStartDateTime = payDateTimes.start,
+            payEndDateTime = payDateTimes.endInclusive,
+            billableOt = billableOt,
+            needsReconciliation = false,
+            rate = rate,
+            payRate = payRate
         )
 
         updateEmployeeWorkHoursWithinPeriod (
@@ -52,7 +56,8 @@ fun clockOut (shiftPk: ULong, workLocationPk: ULong, dateTimes: ClosedRange<Date
 }
 
 fun changePayTimes (shiftPk: ULong, workLocationPk: ULong, dateTimes: ClosedRange<DateTime>,
-                    payDateTimes: ClosedRange<DateTime>, employeePk: ULong, needsReconciliation: Boolean) {
+                    payDateTimes: ClosedRange<DateTime>, employeePk: ULong, needsReconciliation: Boolean,
+                    rate: Float, payRate: Float, billableOt: Boolean) {
 
     if (needsReconciliation) {
 
@@ -72,7 +77,10 @@ fun changePayTimes (shiftPk: ULong, workLocationPk: ULong, dateTimes: ClosedRang
             dateTimes.endInclusive,
             payDateTimes.start,
             payDateTimes.endInclusive,
-            needsReconciliation = false
+            billableOt = billableOt,
+            needsReconciliation = false,
+            rate = rate,
+            payRate = payRate
         )
 
         updateEmployeeWorkHoursWithinPeriod (
@@ -88,16 +96,17 @@ fun changePayTimes (shiftPk: ULong, workLocationPk: ULong, dateTimes: ClosedRang
 }
 
 fun assignShiftToEmployee (shiftPk: ULong, dateTimes: ClosedRange<DateTime>, workLocationPk: ULong,
-                           employeePk: ULong, branchTimeZone: ZoneId) = assignShiftsToEmployee (
+                           employeePk: ULong, billableOt: Boolean, branchTimeZone: ZoneId) = assignShiftsToEmployee (
     parallelShiftPksList = listOf(shiftPk),
     parallelDateTimesList = listOf(dateTimes),
     workLocationPk = workLocationPk,
     employeePk = employeePk,
+    billableOt = billableOt,
     branchTimeZone = branchTimeZone
 )
 
 fun assignShiftsToEmployee (parallelShiftPksList: List<ULong>, parallelDateTimesList: List<ClosedRange<DateTime>>,
-                            workLocationPk: ULong, employeePk: ULong, branchTimeZone: ZoneId) {
+                            workLocationPk: ULong, employeePk: ULong, billableOt: Boolean, branchTimeZone: ZoneId) {
 
     val dateTimeNow = DateTime(branchTimeZone)
 
@@ -115,7 +124,10 @@ fun assignShiftsToEmployee (parallelShiftPksList: List<ULong>, parallelDateTimes
             endDateTime = endDateTime,
             payStartDateTime = payStartDateTime,
             payEndDateTime = payEndDateTime,
-            needsReconciliation = false
+            billableOt = billableOt,
+            needsReconciliation = false,
+            rate = TODO(),
+            payRate = TODO()
         )
     }
 
@@ -143,16 +155,18 @@ fun assignShiftsToEmployee (parallelShiftPksList: List<ULong>, parallelDateTimes
 }
 
 fun createShift (workLocationPk: ULong, dateTimes: ClosedRange<DateTime>, employeePk: ULong?,
-                 branchTimeZone: ZoneId, newBreaks: List<Break>?) = createShifts (
+                 branchTimeZone: ZoneId, newBreaks: List<Break>?, billableOt: Boolean) = createShifts (
     workLocationPk = workLocationPk,
     parallelDateTimesList = listOf(dateTimes),
     employeePk = employeePk,
+    billableOt = billableOt,
     branchTimeZone = branchTimeZone,
     parallelNewBreaksList = listOf(newBreaks)
 )
 
 fun createShifts (workLocationPk: ULong, parallelDateTimesList: List<ClosedRange<DateTime>>,
-                  employeePk: ULong?, branchTimeZone: ZoneId, parallelNewBreaksList: List<List<Break>?>) {
+                  employeePk: ULong?, billableOt: Boolean, branchTimeZone: ZoneId,
+                  parallelNewBreaksList: List<List<Break>?>) {
 
     if (employeePk == null) {
 
@@ -180,7 +194,10 @@ fun createShifts (workLocationPk: ULong, parallelDateTimesList: List<ClosedRange
                 endDateTime = endDateTime,
                 payStartDateTime = payStartDateTime,
                 payEndDateTime = payEndDateTime,
-                needsReconciliation = false
+                billableOt = billableOt,
+                needsReconciliation = false,
+                rate = TODO(),
+                payRate = TODO()
             )
         }
 
@@ -206,7 +223,7 @@ fun createShifts (workLocationPk: ULong, parallelDateTimesList: List<ClosedRange
 fun editShiftHours (parallelShiftPksList: List<ULong>, parallelDateTimesList: List<ClosedRange<DateTime>>,
                     parallelPayDateTimesList: List<ClosedRange<DateTime>?>, workLocationPk: ULong,
                     parallelNewBreaks: List<List<Break>?>, parallelNeedsReconciliation: List<Boolean>,
-                    employeePk: ULong?) {
+                    employeePk: ULong?, parallelBillableOt: List<Boolean>) {
 
     if (employeePk == null) {
 
@@ -223,7 +240,10 @@ fun editShiftHours (parallelShiftPksList: List<ULong>, parallelDateTimesList: Li
                 endDateTime = parallelDateTimesList[index].endInclusive,
                 payStartDateTime = parallelPayDateTimesList[index]?.start,
                 payEndDateTime = parallelPayDateTimesList[index]?.endInclusive,
-                needsReconciliation = parallelNeedsReconciliation[index]
+                billableOt = parallelBillableOt[index],
+                needsReconciliation = parallelNeedsReconciliation[index],
+                rate = TODO(),
+                payRate = TODO()
             )
         }
 
@@ -249,7 +269,7 @@ fun editShiftHours (parallelShiftPksList: List<ULong>, parallelDateTimesList: Li
 }
 
 fun reconcileShift (shiftPk: ULong, employeePk: ULong, workLocationPk: ULong, dateTimes: ClosedRange<DateTime>,
-                    payDateTimes: ClosedRange<DateTime>) {
+                    payDateTimes: ClosedRange<DateTime>, rate: Float, payRate: Float, billableOt: Boolean) {
 
     val shift = Shift (
         primaryKey = shiftPk,
@@ -259,7 +279,10 @@ fun reconcileShift (shiftPk: ULong, employeePk: ULong, workLocationPk: ULong, da
         endDateTime = dateTimes.endInclusive,
         payStartDateTime = payDateTimes.start,
         payEndDateTime = payDateTimes.endInclusive,
-        needsReconciliation = false
+        billableOt = billableOt,
+        needsReconciliation = false,
+        rate = rate,
+        payRate = payRate
     )
 
     updateEmployeeWorkHoursWithinPeriod (
@@ -360,10 +383,10 @@ private fun getNewWorkHours (shifts: List<Shift>, newBreaks: List<List<Break>?>,
         dataQuery.shiftsStateEnum,
         dataQuery.shiftsBreaks,
         dataQuery.shiftsClient,
+        dataQuery.shiftsBillableOt,
         dataQuery.statesOtDefinitions,
         dataQuery.clientsHolidays,
-        dataQuery.startingDayOfWeek,
-        forPay
+        dataQuery.startingDayOfWeek
     )
 
     val unprocessedShifts = UnprocessedShifts(dataQuery.insertedAt, shiftsHours, dataQuery.shifts)
