@@ -15,7 +15,8 @@ import kotlin.math.roundToInt
 // the same shift, and are ordered by the startDateTime from past to future. All inputs here are assumed to be
 // shift data for one employee. The maps are assumed to be filled with the necessary information for each shift.
 fun getShiftsWorkHours (shiftsDateTimes: List<ClosedRange<DateTime>?>, shiftsStateEnum: List<StateEnum>,
-                        shiftsBreaks: List<List<Break>?>, shiftsClient: List<ULong>, billableOt: List<Boolean>?,
+                        shiftsBreaks: List<List<Break>?>, shiftsClient: List<ULong>,
+                        billableOt: List<Boolean>?, billableTraining: List<Boolean?>?,
                         statesOtDefinitions: Map<StateEnum, Map<StateOtDefinitionEnum, Float?>>,
                         clientsHolidays: Map<ULong, List<Date>?>,
                         startingDayOfWeek: DayOfWeek) : MutableList<WorkHours?> {
@@ -43,6 +44,13 @@ fun getShiftsWorkHours (shiftsDateTimes: List<ClosedRange<DateTime>?>, shiftsSta
             continue
         }
 
+        // If this is a billing calculation (billable training list is not null), the shift is
+        // a training shift (value in the list is not null), and the shift is not billable (value is false), then set
+        // all hours to 0 and skip (do not accumulate anything)
+        if (billableTraining?.get(parallelListIndex) == false) {
+            shiftHours.add(WorkHours(0f, 0f, 0f, 0f, 0f))
+            continue
+        }
 
         // Get the shift's startDateTimes, which may either be the scheduled times or pay times
         val startDateTime = shiftDateTimes.start
@@ -75,11 +83,11 @@ fun getShiftsWorkHours (shiftsDateTimes: List<ClosedRange<DateTime>?>, shiftsSta
         else
             dailyOtAccumulator[clientId] = dailyOtAccumulator[clientId]!! + workSeconds.first
 
-        // First see if overtime is billable
+        // Calculate and combine overtime and split the hours between normal and overtime, if applicable
         val totalSeconds =
 
-            // If for billing and overtime is not billable, then accumulate the weekly by the full worked time and
-            // set overtime to 0
+            // If this calculation is for billing (billable OT list is not null) and overtime is not billable, then
+            // accumulate the weekly overtime variable by the full worked time and set overtime to 0
             if (billableOt?.get(parallelListIndex) == false) {
 
                 if (weeklyOtAccumulator[clientId] == null)
@@ -89,7 +97,7 @@ fun getShiftsWorkHours (shiftsDateTimes: List<ClosedRange<DateTime>?>, shiftsSta
 
                 Pair(workSeconds.first.toLong(), Pair(0L, 0L))
 
-            // Otherwise, the shift is for pay or overtime is billable
+            // Otherwise, the shift is for pay or overtime is billable and overtime must be calculated
             } else {
 
                 // Retrieve the State overtime definitions

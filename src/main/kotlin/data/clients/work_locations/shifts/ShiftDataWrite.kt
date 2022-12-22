@@ -5,18 +5,16 @@ import date_time.DateTime
 
 
 fun updatePayStartTimeData (shiftPk: ULong, payStartDateTime: DateTime, needsReconciliation: Boolean) {
-    // Run SQL query to update the "pay_start_date_time" field for this shift, and also update the
-    // reconciliation status
+    // Run SQL query to update the "pay_start_date_time" field for this shift
+    // If the shift needs reconciliation, then also set reconciliation data for this shift
 }
 
-fun updatePayEndTimeData (shiftPk: ULong, payEndDateTime: DateTime, needsReconciliation: Boolean) {
-    // Run SQL query to update the "pay_end_date_time" field for this shift, and also update the
-    //    // reconciliation status
+fun updatePayEndTimeAndUnreconcileShiftData (shiftPk: ULong, payEndDateTime: DateTime) {
+    // Run SQL query to update the "pay_end_date_time" field for this shift and set the shift as unreconciled
 }
 
-fun updatePayTimesData (shiftPk: ULong, payDateTimes: ClosedRange<DateTime>, needsReconciliation: Boolean) {
-    // Run SQL query to update the "pay_start_date_time" and "pay_end_date_time" field for this shift, and also
-    // update the reconciliation status
+fun updatePayTimesData (shiftPk: ULong, payDateTimes: ClosedRange<DateTime>) {
+    // Run SQL query to update the "pay_start_date_time" and "pay_end_date_time" field for this shift
 }
 
 fun updatePayHoursData (shifts: List<Shift>, shiftPayWorkHours: List<WorkHours?>, needsReconciliation: List<Boolean>) {
@@ -48,12 +46,12 @@ fun createAndUpdateShiftHoursData (newShiftsInsertedAt: List<Int>, shifts: List<
     // update any new break records.
 }
 
-fun createOpenShiftRecords (workLocationPk: ULong, dateTimes: List<ClosedRange<DateTime>>,
-                            newBreaks: List<List<Break>?>) {
+fun createOpenShiftRecords (workLocationPk: ULong, dateTimesList: List<ClosedRange<DateTime>>, billableOt: Boolean,
+                            billableTraining: Boolean?, newBreaks: List<Break>?) {
     // Run a SQL query to create new open shift records without any hours and add or update any new break records
 }
 
 fun updateOpenShiftRecords (parallelShiftPks: List<ULong>, parallelDateTimes: List<ClosedRange<DateTime>>,
-                            parallelNewBreaks: List<List<Break>?>) {
+                            breaks: List<Break>?, billableOt: Boolean, billableTraining: Boolean?) {
     // Run a SQL query to update existing shift records without any hours and add or update any new break records
 }

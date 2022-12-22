@@ -5,6 +5,7 @@ import data.states.StateOtDefinitionEnum
 import date_time.Date
 import date_time.DateTime
 import java.time.DayOfWeek
+import kotlin.math.roundToLong
 
 fun main () {
 
@@ -45,6 +46,7 @@ fun main () {
 
         val billableOt = List (shiftsDateTimes.size) { false }
 
+        val billableTraining = List (shiftsDateTimes.size) { null }
 
         val payHours = getShiftsWorkHours (
             shiftsDateTimes,
@@ -52,6 +54,7 @@ fun main () {
             shiftsBreaks,
             shiftsClients,
             billableOt = null,
+            billableTraining = null,
             statesOtDefs,
             clientsHolidays,
             startingDayOfWeek
@@ -63,6 +66,7 @@ fun main () {
             shiftsBreaks,
             shiftsClients,
             billableOt,
+            billableTraining,
             statesOtDefs,
             clientsHolidays,
             startingDayOfWeek
@@ -77,8 +81,17 @@ fun main () {
                 println("\t\tNone")
             else
                 for (brk in shiftsBreaks[index]) {
-                    println("\t\t${brk.startDateTime}")
+                    val breakType =
+                        if (brk.isPremium)
+                            "PBRK (Premium break)"
+                        else if (brk.isPaid)
+                            "PABRK (Paid break)"
+                        else
+                            "BRK (Non-paid break)"
+                    println("\t\t--- $breakType ---")
+                    println("\t\t\t${brk.startDateTime}")
                     println("\t\t\t${brk.durationMinutes} min")
+                    println("\t\t\t${((brk.durationMinutes.toFloat() / 60) * 100).roundToLong().toFloat() / 100} hr")
                 }
             println("\tWorked hours: ${payHours[index]?.workedHours}")
             println("\tNormal hours:\n" +
@@ -98,13 +111,13 @@ fun main () {
 
     }
 
-    val shiftA1Start = DateTime(2022u, 8u, 1u, 0u, 0u, 0u)
-    val shiftA1End = DateTime(2022u, 8u, 1u, 20u, 0u, 0u)
+    val shiftA1Start = DateTime(2022u, 8u, 2u, 0u, 0u, 0u)
+    val shiftA1End = DateTime(2022u, 8u, 2u, 20u, 0u, 0u)
     val breaksA1 = listOf (
         Break (
             0u,
             0u,
-            DateTime(2022u, 8u, 1u, 12u, 0u, 0u),
+            DateTime(2022u, 8u, 2u, 12u, 0u, 0u),
             20u,
             false,
             false,
@@ -400,6 +413,36 @@ fun main () {
 
     println("EMPLOYEE H")
     printPayAndBillHoursForEmployee(employeeH, employeeHBreaks)
+
+    println("BREAK CHECK")
+    printPayAndBillHoursForEmployee (
+        listOf (
+            DateTime(2022u, 1u, 1u, 0u, 0u, 0u)
+                .rangeTo(DateTime(2022u, 1u, 1u, 1u, 0u, 0u))
+        ),
+        listOf (
+            listOf (
+                Break (
+                    1u,
+                    1u,
+                    DateTime(2022u, 1u, 1u, 0u, 0u, 0u),
+                    10u,
+                    false,
+                    false,
+                    true
+                ),
+                Break (
+                    1u,
+                    1u,
+                    DateTime(2022u, 1u, 1u, 0u, 10u, 0u),
+                    10u,
+                    false,
+                    false,
+                    true
+                )
+            )
+        )
+    )
 
     /*
 

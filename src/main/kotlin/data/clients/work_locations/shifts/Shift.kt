@@ -7,7 +7,8 @@ import kotlin.math.roundToInt
 
 class Shift (val primaryKey: ULong?, val employeePk: ULong?, val workLocationPk: ULong, val startDateTime: DateTime,
              val endDateTime: DateTime, val payStartDateTime: DateTime?, val payEndDateTime: DateTime?,
-             val billableOt: Boolean, val needsReconciliation: Boolean, val rate: Float?, val payRate: Float?) {
+             val billableOt: Boolean, val billableTraining: Boolean?, val needsReconciliation: Boolean,
+             val rate: Float?, val payRate: Float?) {
     fun generateInvoiceEntry (workHours: WorkHours, breaks: List<Break>, normalRate: Float,
                               otModifier: Float, dblotModifier: Float, holidayModifier: Float) : InvoiceEntry? {
 

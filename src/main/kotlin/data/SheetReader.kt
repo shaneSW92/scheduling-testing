@@ -201,12 +201,21 @@ object SheetReader {
                     allShiftsSorted[index].billableOt
                 }
 
+        val parallelBillableTrainingList =
+            if (forPay)
+                null
+            else
+                List (allShiftsSorted.size) { index ->
+                    allShiftsSorted[index].billableTraining
+                }
+
         return ShiftCalculationDataQuery (
             shiftsDateTimes = parallelDateTimesList,
             shiftsStateEnum = parallelStateEnumList,
             shiftsBreaks = parallelBreakList,
             shiftsClient = parallelClientList,
             shiftsBillableOt = parallelBillableOtList,
+            shiftsBillableTraining = parallelBillableTrainingList,
             statesOtDefinitions = getStateEnumToStateOtDefinitionsMap(parallelStateEnumList),
             clientsHolidays = getClientPkToHolidaysMap(parallelClientList),
             startingDayOfWeek = startingDayOfWeek,
@@ -220,6 +229,7 @@ object SheetReader {
                                           val shiftsStateEnum: List<StateEnum>,
                                           val shiftsBreaks: List<List<Break>?>, val shiftsClient: List<ULong>,
                                           val shiftsBillableOt: List<Boolean>?,
+                                          val shiftsBillableTraining: List<Boolean?>?,
                                           val statesOtDefinitions: Map<StateEnum, Map<StateOtDefinitionEnum, Float?>>,
                                           val clientsHolidays: Map<ULong, List<Date>>,
                                           val startingDayOfWeek: DayOfWeek, val insertedAt: List<Int>,
@@ -289,6 +299,7 @@ object SheetReader {
                 payStartDateTime = shiftMap[ShiftData.PAY_START_DATE_TIME] as DateTime?,
                 payEndDateTime = shiftMap[ShiftData.PAY_END_DATE_TIME] as DateTime?,
                 billableOt = shiftMap[ShiftData.BILLABLE_OT] as Boolean? ?: false,
+                billableTraining = shiftMap[ShiftData.BILLABLE_TRAINING] as Boolean?,
                 needsReconciliation = shiftMap[ShiftData.NEEDS_RECONCILIATION] as Boolean? ?: false,
                 rate = shiftMap[ShiftData.BILL_RATE] as Float?,
                 payRate = shiftMap[ShiftData.PAY_RATE] as Float?

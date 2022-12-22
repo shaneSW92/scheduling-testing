@@ -18,6 +18,7 @@ enum class ShiftData (override val fieldName: String, override val valueType: Va
         END_DATE ("shift_start_time", DATE, false),
         END_TIME ("shift_start_time", TIME, false),
         BILLABLE_OT ("???", BOOLEAN, true),
+        BILLABLE_TRAINING ("???", BOOLEAN, true),
         WORKED_HOURS ("worked_hours", FLOAT, true),
         NORMAL_HOURS ("normal_hours", FLOAT, true),
         OT_HOURS ("ot_hours", FLOAT, true),
